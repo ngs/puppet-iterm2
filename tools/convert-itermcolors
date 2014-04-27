@@ -1,0 +1,100 @@
+#!/usr/bin/env ruby
+#
+# vim: set filetype=ruby:
+#
+# .itermcolors -> .pp converter
+#
+require 'erb'
+require 'plist'
+
+class String
+
+  def to_varname
+    downcase.gsub /\s/, '_'
+  end
+
+  def deindent
+    gsub /^\s{6}/, ""
+  end
+
+end
+
+class Converter
+
+  attr_accessor :xml, :out
+
+  def initialize(out, xml_or_file)
+    @xml = Plist::parse_xml(ARGV[1] || STDIN.read)
+    @out = out
+  end
+
+  def usage
+    <<-END_USAGE.deindent
+      Usage: convert-itermcolors theme_name theme_filename
+
+        # from filename
+        cat Tomorrow\ Night.itermcolors | convert-itermcolors 'Tomorrow Night'
+
+        # or from standard input
+        convert-itermcolors 'Tomorrow Night' Tomorrow\ Night.itermcolors
+    END_USAGE
+  end
+
+  def name
+    out || 'Unnamed'
+  end
+
+  def outname
+    "#{name.to_varname}.pp"
+  end
+
+  def erb
+    @erb ||= ERB.new <<-END_ERB.deindent
+      # Public: Imports the <%= name %> colorscheme
+      #
+      # Usage:
+      #
+      #   include iterm2::colors::<%= name.to_varname  %>
+      #
+      class iterm2::colors::<%= name.to_varname %>(
+      <% xml.each do|key, value| %>
+        $<%= key.to_varname %> = [
+          <%= value['Red Component'] %>,
+          <%= value['Green Component'] %>,
+          <%= value['Blue Component'] %>
+        ]
+      <% end %>
+      ) {
+        iterm2::colors { '<%= name %>'
+      <%= xml.keys.map {|key|
+        "    \#{ key.to_varname }\#{ ' ' * (max_varname - key.length) } => $\#{ key.to_varname }"
+      }.join ",\n" %>
+        }
+      }
+    END_ERB
+  end
+
+  def render
+    erb.result binding
+  end
+
+  def max_varname
+    @max_vaname ||= xml.keys.max_by{|k| k.length }.length
+  end
+
+  def self.run argv
+    c = self.new argv[0], argv[1]
+    unless c.xml
+      puts c.usage
+      exit 0
+    end
+    if c.out
+      IO.write File.join(File.dirname(__FILE__), "../manifests/colors/#{ c.outname }"), c.render
+    else
+      puts c.render
+    end
+  end
+
+end
+
+Converter.run ARGV
