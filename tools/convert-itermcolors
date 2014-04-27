@@ -62,10 +62,10 @@ class Converter
           <%= value['Red Component'] %>,
           <%= value['Green Component'] %>,
           <%= value['Blue Component'] %>
-        ]
+        ],
       <% end %>
       ) {
-        iterm2::colors { '<%= name %>'
+        iterm2::colors { '<%= name %>':
       <%= xml.keys.map {|key|
         "    \#{ key.to_varname }\#{ ' ' * (max_varname - key.length) } => $\#{ key.to_varname }"
       }.join ",\n" %>
@@ -75,7 +75,7 @@ class Converter
   end
 
   def render
-    erb.result binding
+    erb.result(binding).gsub(/\n\n/, "\n")
   end
 
   def max_varname
